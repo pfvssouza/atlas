@@ -4,83 +4,84 @@
 <meta charset="UTF-8">
 <title>Atlas GIHPP</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Roboto+Slab:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #f2efe9; font-family: 'Inter', sans-serif; color: #2a2620; }
-  .atlas-wrap { position: relative; width: 100%; height: 1080px; border: 1px solid #d8d2c4; }
-  .atlas-header {
-    padding: 18px 22px 14px;
-    border-bottom: 1px solid #d8d2c4;
-    background: #f2efe9;
-  }
-  .atlas-header h1 {
-    font-family: 'Source Serif 4', serif;
-    font-weight: 600;
-    font-size: 22px;
-    margin: 0 0 2px;
-    letter-spacing: 0.2px;
-  }
-  .atlas-header p {
-    margin: 0;
-    font-size: 12.5px;
-    color: #6b6459;
-  }
-  #map { width: 100%; height: 1000px; background: #e7e2d6; }
+  html, body { margin: 0; padding: 0; background: #ffffff; font-family: 'Manrope', sans-serif; color: #3c0c0c; }
+  .atlas-wrap { position: relative; width: 100%; height: 800px; }
+  #map { width: 100%; height: 800px; background: #ffffff; }
   .legend {
     position: absolute;
     bottom: 14px;
     left: 14px;
     z-index: 500;
-    background: rgba(242,239,233,0.94);
-    border: 1px solid #d8d2c4;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #dbdbdb;
     border-radius: 3px;
     padding: 10px 12px;
     font-size: 11.5px;
     line-height: 1.7;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px rgba(60,12,12,0.10);
   }
   .legend-title {
-    font-family: 'Source Serif 4', serif;
-    font-size: 11px;
-    color: #6b6459;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #3c0c0c;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.7px;
     margin-bottom: 4px;
   }
-  .legend-row { display: flex; align-items: center; gap: 7px; }
+  .legend-row { display: flex; align-items: center; gap: 7px; font-weight: 500; }
   .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
-  .legend-sep { height: 1px; background: #d8d2c4; margin: 7px 0; }
+  .legend-sep { height: 1px; background: #dbdbdb; margin: 7px 0; }
+
+  /* Popup */
   .popup-name {
-    font-family: 'Source Serif 4', serif;
+    font-family: 'Roboto Slab', serif;
     font-weight: 600;
-    font-size: 14.5px;
-    margin: 0 0 4px;
+    font-size: 15px;
+    line-height: 1.25;
+    color: #961E1E;
+    margin: 0 0 5px;
   }
-  .popup-type {
-    display: inline-block;
-    font-size: 10px;
+  .popup-meta {
+    font-size: 11px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #6b6459;
-    margin-bottom: 6px;
+    letter-spacing: 0.4px;
+    color: #3c0c0c;
+    margin-bottom: 8px;
   }
-  .popup-field { font-size: 12.5px; margin: 3px 0; }
-  .popup-field b { color: #6b6459; font-weight: 500; }
-  .popup-desc { font-size: 12px; margin-top: 6px; color: #3d3a34; line-height: 1.4; }
-  .popup-site { font-size: 12px; margin-top: 6px; }
-  .popup-site a { color: hsl(222 42% 38%); }
+  .popup-field { margin: 6px 0 0; }
+  .popup-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #3c0c0c;
+    margin-bottom: 1px;
+  }
+  .popup-value { font-size: 12.5px; font-weight: 400; color: #3c0c0c; line-height: 1.4; }
+  .popup-value a { color: #961E1E; text-decoration: underline; word-break: break-word; }
   .leaflet-popup-content-wrapper { border-radius: 4px; }
+  .leaflet-popup-content { margin: 12px 14px; }
   .leaflet-interactive:focus { outline: none; }
+
+  /* Clicked-state rise animation: red fill, thin white outline, scale up from
+     the state's own centroid, soft shadow so it reads as lifted off the map. */
+  .state-raised {
+    filter: drop-shadow(0 4px 6px rgba(60,12,12,0.35));
+    transition: transform 220ms ease-out;
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: scale(1.06);
+  }
 </style>
 </head>
 <body>
 
 <div class="atlas-wrap">
-  <div class="atlas-header">
-    <h1>Atlas GIHPP</h1>
-    <p>Instituições de ensino e de psicanálise no Brasil</p>
-  </div>
   <div id="map"></div>
   <div class="legend">
     <div class="legend-title">Regiões</div>
@@ -91,8 +92,8 @@
     <div class="legend-row"><span class="swatch" style="background:hsl(340 38% 36%)"></span>Sul</div>
     <div class="legend-sep"></div>
     <div class="legend-title">Tipo</div>
-    <div class="legend-row"><span style="width:11px;height:11px;border-radius:50%;background:#2a2620;display:inline-block;"></span>Universidade</div>
-    <div class="legend-row"><span style="width:11px;height:11px;background:#2a2620;display:inline-block;transform:rotate(45deg);"></span>Instituição de Psicanálise</div>
+    <div class="legend-row"><span style="width:11px;height:11px;border-radius:50%;background:#3c0c0c;display:inline-block;"></span>Universidade</div>
+    <div class="legend-row"><span style="width:11px;height:11px;background:#3c0c0c;display:inline-block;transform:rotate(45deg);"></span>Instituição de Psicanálise</div>
   </div>
 </div>
 
@@ -162,28 +163,50 @@ function baseStyle(feature) {
   return {
     fillColor: stateColor(feature.properties.sigla, feature.properties.regiao),
     fillOpacity: 0.55,
-    color: '#f2efe9',
+    color: '#ffffff',
     weight: 1.1,
     lineJoin: 'round',
     lineCap: 'round'
   };
 }
 
+const GIHPP_RED = '#961E1E';
 let selectedLayer = null;
+
+// Return a state to its resting appearance and remove the raised effect.
+function clearSelection() {
+  if (!selectedLayer) return;
+  const el = selectedLayer.getElement && selectedLayer.getElement();
+  if (el) el.classList.remove('state-raised');
+  statesLayer.resetStyle(selectedLayer);
+  selectedLayer = null;
+}
+
+// Lift a state: red fill, thin white outline, scale up from centroid, shadow.
+function raiseState(layer) {
+  layer.setStyle({ fillColor: GIHPP_RED, fillOpacity: 0.9, color: '#ffffff', weight: 1.5 });
+  layer.bringToFront();
+  const el = layer.getElement && layer.getElement();
+  // Force a reflow so the transition runs from the base transform each time.
+  if (el) { void el.getBoundingClientRect(); el.classList.add('state-raised'); }
+  selectedLayer = layer;
+}
+
 const statesLayer = L.geoJSON(statesGeo, {
   style: baseStyle,
   onEachFeature: (feature, layer) => {
     layer.bindTooltip(feature.properties.nome, { sticky: true, className: 'state-tip' });
-    layer.on('click', () => {
-      if (selectedLayer && selectedLayer !== layer) {
-        statesLayer.resetStyle(selectedLayer);
-      }
-      layer.setStyle({ weight: 3, color: '#2a2620', fillOpacity: 0.72 });
-      layer.bringToFront();
-      selectedLayer = layer;
+    layer.on('click', (e) => {
+      L.DomEvent.stopPropagation(e); // don't let the map-background handler fire
+      if (selectedLayer === layer) return;
+      clearSelection();
+      raiseState(layer);
     });
   }
 }).addTo(map);
+
+// Clicking anywhere that isn't a state returns the raised state to rest.
+map.on('click', clearSelection);
 
 // Determine which state a coordinate falls inside (ray-casting), so pin colour
 // follows its region/state automatically - no state column needed in the sheet.
@@ -221,8 +244,8 @@ function findState(lat, lng) {
 // Markers
 function makeIcon(tipo, color) {
   const shape = tipo === 'Universidade'
-    ? `<circle cx="9" cy="9" r="7" fill="${color}" stroke="#f2efe9" stroke-width="2"/>`
-    : `<rect x="3" y="3" width="12" height="12" rx="2" fill="${color}" stroke="#f2efe9" stroke-width="2" transform="rotate(45 9 9)"/>`;
+    ? `<circle cx="9" cy="9" r="7" fill="${color}" stroke="#ffffff" stroke-width="2"/>`
+    : `<rect x="3" y="3" width="12" height="12" rx="2" fill="${color}" stroke="#ffffff" stroke-width="2" transform="rotate(45 9 9)"/>`;
   return L.divIcon({
     className: 'inst-icon',
     html: `<svg width="18" height="18" viewBox="0 0 18 18">${shape}</svg>`,
@@ -271,7 +294,7 @@ function addInstitution(rec) {
   const coords = parseCoords(rec[COL.coords]);
   if (!coords) return; // skip rows without valid coordinates
   const st = findState(coords.lat, coords.lng);
-  const color = st ? stateColor(st.sigla, st.regiao) : '#6b6459';
+  const color = st ? stateColor(st.sigla, st.regiao) : '#3c0c0c';
   const tipo = (rec[COL.tipo] || '').trim();
 
   const marker = L.marker([coords.lat, coords.lng], { icon: makeIcon(tipo, color) }).addTo(map);
@@ -283,11 +306,18 @@ function addInstitution(rec) {
   const site = (rec[COL.site] || '').trim();
 
   let html = `<div class="popup-name">${nome}</div>`;
-  const sub = [escapeHtml(tipo), cidade].filter(Boolean).join(' · ');
-  if (sub) html += `<div class="popup-type">${sub}</div>`;
-  if (endereco) html += `<div class="popup-field"><b>Endereço:</b> ${endereco}</div>`;
-  if (info) html += `<div class="popup-desc">${escapeHtml(info).replace(/\n/g, '<br>')}</div>`;
-  if (site) html += `<div class="popup-site"><a href="${escapeHtml(site)}" target="_blank" rel="noopener">Site</a></div>`;
+  const meta = [escapeHtml(tipo), cidade].filter(Boolean).join(' · ').toUpperCase();
+  if (meta) html += `<div class="popup-meta">${meta}</div>`;
+  if (endereco) {
+    html += `<div class="popup-field"><div class="popup-label">Endereço</div><div class="popup-value">${endereco}</div></div>`;
+  }
+  if (info) {
+    html += `<div class="popup-field"><div class="popup-label">Informações Relevantes</div><div class="popup-value">${escapeHtml(info).replace(/\n/g, '<br>')}</div></div>`;
+  }
+  if (site) {
+    const safeSite = escapeHtml(site);
+    html += `<div class="popup-field"><div class="popup-label">Site</div><div class="popup-value"><a href="${safeSite}" target="_blank" rel="noopener">${safeSite}</a></div></div>`;
+  }
 
   marker.bindPopup(html, { maxWidth: 280 });
 }
