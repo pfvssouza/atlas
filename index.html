@@ -77,8 +77,8 @@
   .leaflet-popup-content { margin: 16px 16px; }
   .leaflet-interactive:focus { outline: none; }
 
-  /* Clicked-state rise animation: red fill, thin white outline, scale up from
-     the state's own centroid, soft shadow so it reads as lifted off the map. */
+  /* Clicked-state rise: keeps its own colour, thin white outline (set in JS),
+     scales up from its own centroid with a soft shadow so it reads as lifted. */
   .state-raised {
     filter: drop-shadow(0 4px 6px rgba(60,12,12,0.35));
     transition: transform 220ms ease-out;
@@ -86,12 +86,56 @@
     transform-origin: center;
     transform: scale(1.06);
   }
+  /* Every other state while one is selected: drop to 0% saturation but keep
+     lightness, so region/state borders stay legible in greyscale. */
+  .state-muted {
+    filter: saturate(0);
+    transition: filter 220ms ease-out;
+  }
+
+  /* Custom hover label: a red connector line from the cursor into a solid
+     GIHPP-red tag with the state name in white Roboto Slab. Follows the cursor,
+     always to the right, flips left near the right edge. */
+  #hover-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 600;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 130ms ease-out;
+    will-change: transform;
+  }
+  #hover-label.on { opacity: 1; }
+  #hover-label .hl-line {
+    height: 2px;
+    width: 22px;
+    background: #961E1E;
+    flex: none;
+  }
+  #hover-label .hl-tag {
+    background: #961E1E;
+    color: #ffffff;
+    font-family: 'Roboto Slab', serif;
+    font-weight: 500;
+    font-size: 12.5px;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  /* Flipped orientation near the right edge: tag first, line to its right,
+     and the whole label shifted left of the cursor. */
+  #hover-label.flip { flex-direction: row-reverse; }
 </style>
 </head>
 <body>
 
 <div class="atlas-wrap">
   <div id="map"></div>
+  <div id="hover-label"><span class="hl-line"></span><span class="hl-tag"></span></div>
   <div class="legend">
     <div class="legend-title">Regiões</div>
     <div class="legend-row"><span class="swatch" style="background:hsl(150 42% 32%)"></span>Norte</div>
@@ -180,32 +224,76 @@ function baseStyle(feature) {
   };
 }
 
-const GIHPP_RED = '#961E1E';
 let selectedLayer = null;
 
-// Return a state to its resting appearance and remove the raised effect.
+// Return everything to rest: un-raise the selected state and restore colour
+// to all the others.
 function clearSelection() {
   if (!selectedLayer) return;
   const el = selectedLayer.getElement && selectedLayer.getElement();
   if (el) el.classList.remove('state-raised');
   statesLayer.resetStyle(selectedLayer);
+  statesLayer.eachLayer((l) => {
+    const le = l.getElement && l.getElement();
+    if (le) le.classList.remove('state-muted');
+  });
   selectedLayer = null;
 }
 
-// Lift a state: red fill, thin white outline, scale up from centroid, shadow.
+// Lift a state: it keeps its own colour, gains a thin white outline, scales up
+// from its centroid with a shadow; every other state desaturates to greyscale.
 function raiseState(layer) {
-  layer.setStyle({ fillColor: GIHPP_RED, fillOpacity: 0.9, color: '#ffffff', weight: 1.5 });
+  layer.setStyle({ fillOpacity: 0.72, color: '#ffffff', weight: 1.5 });
   layer.bringToFront();
+  statesLayer.eachLayer((l) => {
+    if (l === layer) return;
+    const le = l.getElement && l.getElement();
+    if (le) le.classList.add('state-muted');
+  });
   const el = layer.getElement && layer.getElement();
   // Force a reflow so the transition runs from the base transform each time.
   if (el) { void el.getBoundingClientRect(); el.classList.add('state-raised'); }
   selectedLayer = layer;
 }
 
+// Custom hover label: red connector line + solid red tag with the state name.
+const hoverLabel = document.getElementById('hover-label');
+const hoverTag = hoverLabel.querySelector('.hl-tag');
+const mapEl = document.getElementById('map');
+const HL_GAP = 14;   // cursor-to-label gap
+let hoverName = '';
+
+function positionHoverLabel(e) {
+  const rect = mapEl.getBoundingClientRect();
+  const x = e.originalEvent.clientX - rect.left;
+  const y = e.originalEvent.clientY - rect.top;
+  // Decide side: default right, flip left when close to the right edge.
+  const labelW = hoverLabel.offsetWidth;
+  const flip = (x + HL_GAP + labelW) > rect.width;
+  hoverLabel.classList.toggle('flip', flip);
+  const tx = flip ? (x - HL_GAP - labelW) : (x + HL_GAP);
+  // Vertically centre the label on the cursor.
+  const ty = y - hoverLabel.offsetHeight / 2;
+  hoverLabel.style.transform = `translate(${tx}px, ${ty}px)`;
+}
+
+function showHover(name, e) {
+  if (name !== hoverName) { hoverTag.textContent = name; hoverName = name; }
+  hoverLabel.classList.add('on');
+  positionHoverLabel(e);
+}
+function hideHover() {
+  hoverLabel.classList.remove('on');
+  hoverName = '';
+}
+
 const statesLayer = L.geoJSON(statesGeo, {
   style: baseStyle,
   onEachFeature: (feature, layer) => {
-    layer.bindTooltip(feature.properties.nome, { sticky: true, className: 'state-tip' });
+    const nome = feature.properties.nome;
+    layer.on('mouseover', (e) => showHover(nome, e));
+    layer.on('mousemove', (e) => showHover(nome, e));
+    layer.on('mouseout', hideHover);
     layer.on('click', (e) => {
       L.DomEvent.stopPropagation(e); // don't let the map-background handler fire
       if (selectedLayer === layer) return;
@@ -215,7 +303,7 @@ const statesLayer = L.geoJSON(statesGeo, {
   }
 }).addTo(map);
 
-// Clicking anywhere that isn't a state returns the raised state to rest.
+// Clicking anywhere that isn't a state returns everything to rest.
 map.on('click', clearSelection);
 
 // Determine which state a coordinate falls inside (ray-casting), so pin colour
