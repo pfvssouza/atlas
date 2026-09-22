@@ -176,7 +176,17 @@ statesGeo.features
     REGION_ORDER[r].push(f.properties.sigla);
   });
 
-function stateColor(sigla, regiao) {
+// Convert HSL to RGB (each 0-255).
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+}
+
+// Full-strength region/state colour (HSL). Used for the pins, which stay vivid.
+function stateColorSolid(sigla, regiao) {
   const [hue, sat] = REGION_HUES[regiao];
   const order = REGION_ORDER[regiao];
   const idx = order.indexOf(sigla);
@@ -185,6 +195,24 @@ function stateColor(sigla, regiao) {
   const lightness = order.length > 1
     ? base - spread / 2 + (idx * (spread / (order.length - 1)))
     : base;
+  return [hue, sat, lightness];
+}
+
+// The states used to be drawn at 0.55 opacity, so their on-screen colour was
+// really the region colour blended 55% over the basemap. Now that a selected
+// state is fully opaque, we bake that same softening into the colour itself
+// (55% colour over white) and paint every state opaque - so a state looks
+// identical whether at rest or selected, just crisper and lifted when selected.
+const FILL_MIX = 0.55;
+function stateColor(sigla, regiao) {
+  const [hue, sat, lightness] = stateColorSolid(sigla, regiao);
+  const [r, g, b] = hslToRgb(hue, sat, lightness);
+  const mix = c => Math.round(c * FILL_MIX + 255 * (1 - FILL_MIX));
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+// Vivid version for pins.
+function pinColor(sigla, regiao) {
+  const [hue, sat, lightness] = stateColorSolid(sigla, regiao);
   return `hsl(${hue} ${sat}% ${lightness}%)`;
 }
 
@@ -216,7 +244,7 @@ L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?k
 function baseStyle(feature) {
   return {
     fillColor: stateColor(feature.properties.sigla, feature.properties.regiao),
-    fillOpacity: 0.55,
+    fillOpacity: 1,
     color: '#ffffff',
     weight: 1.1,
     lineJoin: 'round',
@@ -392,7 +420,7 @@ function addInstitution(rec) {
   const coords = parseCoords(rec[COL.coords]);
   if (!coords) return; // skip rows without valid coordinates
   const st = findState(coords.lat, coords.lng);
-  const color = st ? stateColor(st.sigla, st.regiao) : '#3c0c0c';
+  const color = st ? pinColor(st.sigla, st.regiao) : '#3c0c0c';
   const tipo = (rec[COL.tipo] || '').trim();
 
   const marker = L.marker([coords.lat, coords.lng], { icon: makeIcon(tipo, color) }).addTo(map);
