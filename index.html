@@ -243,8 +243,8 @@ L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?k
 
 function baseStyle(feature) {
   return {
-    fillColor: stateColor(feature.properties.sigla, feature.properties.regiao),
-    fillOpacity: 1,
+    fillColor: pinColor(feature.properties.sigla, feature.properties.regiao),
+    fillOpacity: 0.55,
     color: '#ffffff',
     weight: 1.1,
     lineJoin: 'round',
@@ -271,7 +271,14 @@ function clearSelection() {
 // Lift a state: it keeps its own colour, gains a thin white outline, scales up
 // from its centroid with a shadow; every other state desaturates to greyscale.
 function raiseState(layer) {
-  layer.setStyle({ fillOpacity: 1, color: '#ffffff', weight: 1.5 });
+  const p = layer.feature.properties;
+  // Opaque, but using the pre-blended colour so the tone matches its rest look.
+  layer.setStyle({
+    fillColor: stateColor(p.sigla, p.regiao),
+    fillOpacity: 1,
+    color: '#ffffff',
+    weight: 1.5
+  });
   layer.bringToFront();
   statesLayer.eachLayer((l) => {
     if (l === layer) return;
