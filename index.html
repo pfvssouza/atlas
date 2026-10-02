@@ -84,7 +84,7 @@
     transition: transform 220ms ease-out;
     transform-box: fill-box;
     transform-origin: center;
-    transform: scale(1.03);
+    transform: scale(1.06);
   }
   /* Every other state while one is selected: drop to 0% saturation but keep
      lightness, so region/state borders stay legible in greyscale. */
@@ -92,11 +92,6 @@
     filter: saturate(0);
     transition: filter 220ms ease-out;
   }
-  /* While a state is selected the basemap itself goes greyscale, so the streets
-     and labels stay readable everywhere but only the selected state holds
-     colour. Pins live in the marker pane and keep their colour. */
-  .leaflet-tile-pane { transition: filter 220ms ease-out; }
-  .atlas-wrap.has-selection .leaflet-tile-pane { filter: grayscale(1); }
 
   /* Custom hover label: a red connector line from the cursor into a solid
      GIHPP-red tag with the state name in white Roboto Slab. Follows the cursor,
@@ -258,7 +253,6 @@ function baseStyle(feature) {
 }
 
 let selectedLayer = null;
-const atlasWrap = document.querySelector('.atlas-wrap');
 
 // Return everything to rest: un-raise the selected state and restore colour
 // to all the others.
@@ -266,7 +260,6 @@ function clearSelection() {
   if (!selectedLayer) return;
   const el = selectedLayer.getElement && selectedLayer.getElement();
   if (el) el.classList.remove('state-raised');
-  atlasWrap.classList.remove('has-selection');
   statesLayer.resetStyle(selectedLayer);
   statesLayer.eachLayer((l) => {
     const le = l.getElement && l.getElement();
@@ -278,11 +271,15 @@ function clearSelection() {
 // Lift a state: it keeps its own colour, gains a thin white outline, scales up
 // from its centroid with a shadow; every other state desaturates to greyscale.
 function raiseState(layer) {
-  // Colour and opacity stay exactly as at rest, so its streets and labels keep
-  // showing through and there is no tonality jump. Only the outline thickens.
-  layer.setStyle({ color: '#ffffff', weight: 1.5 });
+  const p = layer.feature.properties;
+  // Opaque, but using the pre-blended colour so the tone matches its rest look.
+  layer.setStyle({
+    fillColor: stateColor(p.sigla, p.regiao),
+    fillOpacity: 1,
+    color: '#ffffff',
+    weight: 1.5
+  });
   layer.bringToFront();
-  atlasWrap.classList.add('has-selection');
   statesLayer.eachLayer((l) => {
     if (l === layer) return;
     const le = l.getElement && l.getElement();
