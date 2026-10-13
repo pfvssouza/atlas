@@ -34,6 +34,7 @@
   }
   .legend-row { display: flex; align-items: center; gap: 7px; font-weight: 500; }
   .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+  .legend-pin { width: 20px; height: 20px; flex: none; display: inline-block; }
   .legend-sep { height: 1px; background: #dbdbdb; margin: 7px 0; }
 
   /* Popup */
@@ -150,8 +151,8 @@
     <div class="legend-row"><span class="swatch" style="background:hsl(340 38% 36%)"></span>Sul</div>
     <div class="legend-sep"></div>
     <div class="legend-title">Tipo</div>
-    <div class="legend-row"><span style="width:11px;height:11px;border-radius:50%;background:#3c0c0c;display:inline-block;"></span>Universidade</div>
-    <div class="legend-row"><span style="width:11px;height:11px;background:#3c0c0c;display:inline-block;transform:rotate(45deg);"></span>Instituição de Psicanálise</div>
+    <div class="legend-row"><span id="leg-uni" class="legend-pin"></span>Universidade</div>
+    <div class="legend-row"><span id="leg-inst" class="legend-pin"></span>Instituição de Psicanálise</div>
   </div>
 </div>
 
@@ -378,18 +379,64 @@ function findState(lat, lng) {
 }
 
 // Markers
+// Geometry taken verbatim from Lucide: the map-pin teardrop for the body, and
+// graduation-cap / landmark for the two types. Every one of them is authored in
+// its own 24 unit box with a nominal stroke of 2.
+const PIN_PATH = 'M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0';
+
+const GLYPH_PATHS = {
+  cap: [
+    'M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z',
+    'M22 10v6',
+    'M6 12.5V16a6 3 0 0 0 12 0v-3.5'
+  ],
+  landmark: [
+    'M10 18v-7',
+    'M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z',
+    'M14 18v-7',
+    'M18 18v-7',
+    'M3 22h18',
+    'M6 18v-7'
+  ]
+};
+
+const PIN_PX = 40;          // rendered marker size in pixels
+const GLYPH_SPAN = 10.5;    // units of the 24 box the glyph fills, inside the ring
+const OUTLINE_W = 2;        // white ring thickness, in viewBox units
+
+// Scaling the glyph down and its stroke back up cancel out exactly, so a
+// stroke of 2 here is the same proportion Lucide itself draws.
+function pinSvg(tipo, color, px) {
+  const key = tipo === 'Universidade' ? 'cap' : 'landmark';
+  const paths = GLYPH_PATHS[key].map(p => `<path d="${p}"/>`).join('');
+  const s = GLYPH_SPAN / 24;
+  return `<svg width="${px}" height="${px}" viewBox="0 0 24 24" style="display:block;">`
+    + `<path d="${PIN_PATH}" fill="${color}" stroke="#ffffff" stroke-width="${OUTLINE_W}"`
+    + ` stroke-linejoin="round" paint-order="stroke fill"/>`
+    + `<g transform="translate(12 10) scale(${s}) translate(-12 -12)" fill="none"`
+    + ` stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + `</svg>`;
+}
+
 function makeIcon(tipo, color) {
-  const shape = tipo === 'Universidade'
-    ? `<circle cx="9" cy="9" r="7" fill="${color}" stroke="#ffffff" stroke-width="2"/>`
-    : `<rect x="3" y="3" width="12" height="12" rx="2" fill="${color}" stroke="#ffffff" stroke-width="2" transform="rotate(45 9 9)"/>`;
+  // The teardrop points at y=23 of the 24 box, so the marker is anchored on its
+  // tip rather than its centre: that tip is the coordinate it actually marks.
+  const tipY = PIN_PX * (23 / 24);
   return L.divIcon({
     className: 'inst-icon',
-    html: `<svg width="18" height="18" viewBox="0 0 18 18">${shape}</svg>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -9]
+    html: pinSvg(tipo, color, PIN_PX),
+    iconSize: [PIN_PX, PIN_PX],
+    iconAnchor: [PIN_PX / 2, tipY],
+    popupAnchor: [0, -tipY]
   });
 }
+
+// Legend swatches are built from the same function, so they can never drift
+// out of sync with the markers on the map.
+const legUni = document.getElementById('leg-uni');
+const legInst = document.getElementById('leg-inst');
+if (legUni) legUni.innerHTML = pinSvg('Universidade', '#3c0c0c', 20);
+if (legInst) legInst.innerHTML = pinSvg('Instituicao', '#3c0c0c', 20);
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
