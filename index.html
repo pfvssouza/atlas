@@ -34,7 +34,7 @@
   }
   .legend-row { display: flex; align-items: center; gap: 7px; font-weight: 500; }
   .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
-  .legend-pin { width: 20px; height: 20px; flex: none; display: inline-block; }
+  .legend-pin { width: 18px; height: 18px; flex: none; display: inline-block; }
   .legend-sep { height: 1px; background: #dbdbdb; margin: 7px 0; }
 
   /* Popup */
@@ -240,7 +240,41 @@ const COL = {
 };
 
 // Map setup
-const map = L.map('map', { scrollWheelZoom: true }).setView([-14.2, -51.9], 4);
+const INITIAL_ZOOM = 4;
+const map = L.map('map', { scrollWheelZoom: true }).setView([-14.2, -51.9], INITIAL_ZOOM);
+
+// View framing. A selected state is flown into view and framed; tiny states
+// (DF, SE, AL, RJ) are capped so they keep some surroundings instead of
+// zooming to street level.
+const STATE_MAX_ZOOM = 8;
+const FLY_SECONDS = 0.8;
+const FRAME_MARGIN = 32;     // breathing room around the state, in pixels
+const DESELECT_ZOOM_OUT = 2; // zoom levels to back out when deselecting
+
+// The legend sits over the bottom-left of the map, so the left padding grows
+// by its width: the state is framed in the clear area to its right.
+function framePadding() {
+  const legend = document.querySelector('.legend');
+  const left = (legend ? legend.offsetWidth : 0) + FRAME_MARGIN * 1.5;
+  return {
+    paddingTopLeft: [left, FRAME_MARGIN],
+    paddingBottomRight: [FRAME_MARGIN, FRAME_MARGIN]
+  };
+}
+
+// The zoom level at which a state would be framed, respecting the cap.
+function frameZoomFor(layer) {
+  const p = framePadding();
+  const total = L.point(p.paddingTopLeft).add(p.paddingBottomRight);
+  return Math.min(map.getBoundsZoom(layer.getBounds(), false, total), STATE_MAX_ZOOM);
+}
+
+function frameState(layer) {
+  map.flyToBounds(layer.getBounds(), Object.assign(framePadding(), {
+    maxZoom: STATE_MAX_ZOOM,
+    duration: FLY_SECONDS
+  }));
+}
 
 L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3iqs_1_69f757fa797298b9aa84b34b', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -295,6 +329,27 @@ function raiseState(layer) {
   selectedLayer = layer;
 }
 
+// Select a state and fly it into frame. Clicking the already selected state
+// just re-frames it, which also recentres it if the user has panned away.
+function selectState(layer) {
+  if (selectedLayer !== layer) {
+    clearSelection();
+    raiseState(layer);
+  }
+  frameState(layer);
+}
+
+// Deselect, then back out a couple of zoom levels around the current view.
+// Never further out than the initial whole-country view.
+function deselectAndBackOut() {
+  if (!selectedLayer) return;
+  clearSelection();
+  const target = Math.max(INITIAL_ZOOM, map.getZoom() - DESELECT_ZOOM_OUT);
+  if (target < map.getZoom()) {
+    map.flyTo(map.getCenter(), target, { duration: FLY_SECONDS });
+  }
+}
+
 // Custom hover label: red connector line + solid red tag with the state name.
 const hoverLabel = document.getElementById('hover-label');
 const hoverTag = hoverLabel.querySelector('.hl-tag');
@@ -335,15 +390,17 @@ const statesLayer = L.geoJSON(statesGeo, {
     layer.on('mouseout', hideHover);
     layer.on('click', (e) => {
       L.DomEvent.stopPropagation(e); // don't let the map-background handler fire
-      if (selectedLayer === layer) return;
-      clearSelection();
-      raiseState(layer);
+      selectState(layer);
     });
   }
 }).addTo(map);
 
-// Clicking anywhere that isn't a state returns everything to rest.
-map.on('click', clearSelection);
+// Look up a state's layer by its sigla, used when a pin needs its state.
+const layerBySigla = {};
+statesLayer.eachLayer((l) => { layerBySigla[l.feature.properties.sigla] = l; });
+
+// Clicking anywhere that isn't a state deselects and backs the view out a bit.
+map.on('click', deselectAndBackOut);
 
 // Determine which state a coordinate falls inside (ray-casting), so pin colour
 // follows its region/state automatically - no state column needed in the sheet.
@@ -371,11 +428,38 @@ function pointInFeature(lng, lat, geometry) {
   }
   return false;
 }
+// Distance (in degrees) from a point to a line segment.
+function distToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+// The simplified state outlines cut slightly inside the real coastline in a
+// few places (Rio de Janeiro city sits about 2 km outside its polygon). If a
+// point lands in no state, take the nearest one, as long as it is close.
+const NEAREST_STATE_MAX_DEG = 0.1;   // about 11 km
+
 function findState(lat, lng) {
   for (const f of statesGeo.features) {
     if (pointInFeature(lng, lat, f.geometry)) return f.properties;
   }
-  return null;
+  let best = null, bestD = Infinity;
+  for (const f of statesGeo.features) {
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of polys) {
+      for (const ring of poly) {
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const d = distToSegment(lng, lat, ring[j][0], ring[j][1], ring[i][0], ring[i][1]);
+          if (d < bestD) { bestD = d; best = f.properties; }
+        }
+      }
+    }
+  }
+  return bestD <= NEAREST_STATE_MAX_DEG ? best : null;
 }
 
 // Markers
@@ -431,12 +515,21 @@ function makeIcon(tipo, color) {
   });
 }
 
-// Legend swatches are built from the same function, so they can never drift
-// out of sync with the markers on the map.
+// The bare glyph, without the pin body. Used in the legend, where the plain
+// icon reads better than a miniature pin.
+function glyphSvg(tipo, color, px) {
+  const key = tipo === 'Universidade' ? 'cap' : 'landmark';
+  const paths = GLYPH_PATHS[key].map(p => `<path d="${p}"/>`).join('');
+  return `<svg width="${px}" height="${px}" viewBox="0 0 24 24" style="display:block;"`
+    + ` fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">`
+    + `${paths}</svg>`;
+}
+
+// Legend icons share the same glyph geometry as the map pins.
 const legUni = document.getElementById('leg-uni');
 const legInst = document.getElementById('leg-inst');
-if (legUni) legUni.innerHTML = pinSvg('Universidade', '#3c0c0c', 20);
-if (legInst) legInst.innerHTML = pinSvg('Instituicao', '#3c0c0c', 20);
+if (legUni) legUni.innerHTML = glyphSvg('Universidade', '#3c0c0c', 18);
+if (legInst) legInst.innerHTML = glyphSvg('Instituicao', '#3c0c0c', 18);
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -508,6 +601,23 @@ function addInstitution(rec) {
   }
 
   marker.bindPopup(html, { maxWidth: 280 });
+
+  // Replace Leaflet's default open-on-click with our own handler. When the view
+  // is zoomed out further than the pin's state would be framed, fly to that
+  // state, select it, and open the popup only once the flight has landed.
+  // Otherwise just open the popup as usual.
+  marker.off('click');
+  marker.on('click', (e) => {
+    L.DomEvent.stopPropagation(e);
+    const layer = st ? layerBySigla[st.sigla] : null;
+    if (layer && map.getZoom() < frameZoomFor(layer)) {
+      map.closePopup();
+      map.once('moveend', () => marker.openPopup());
+      selectState(layer);
+    } else {
+      marker.openPopup();
+    }
+  });
 }
 
 // Load the sheet
