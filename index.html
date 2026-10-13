@@ -274,7 +274,34 @@ function frameState(layer) {
     maxZoom: STATE_MAX_ZOOM,
     duration: FLY_SECONDS
   }));
+  flying = true;
 }
+
+// Leaflet quirk: if a drag interrupts an animated flight, Leaflet cancels the
+// animation but never fires the closing "zoomend" event. The state shapes only
+// re-project on that event, so they stay drawn for the old view while the
+// basemap moves on, and they drift away from the borders underneath. Scrolling
+// happens to fix it because a scroll zoom fires zoomend. Here we fire it
+// ourselves the moment a drag cuts a flight short, and once that drag settles
+// we also rebuild the state layer's drawing surface (its size, clipping window
+// and leftover flight scale), which is the rest of what a scroll zoom does.
+// Leaflet is pinned at 1.9.4, so the renderer reset below is stable.
+let flying = false;
+let flightInterrupted = false;
+map.on('dragstart', () => {
+  if (!flying) return;
+  flying = false;
+  flightInterrupted = true;
+  map.fire('zoomend');
+});
+map.on('moveend', () => {
+  flying = false;
+  if (flightInterrupted) {
+    flightInterrupted = false;
+    const renderer = statesLayer.getLayers()[0]._renderer;
+    if (renderer && renderer._reset) renderer._reset();
+  }
+});
 
 L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3iqs_1_69f757fa797298b9aa84b34b', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -347,6 +374,7 @@ function deselectAndBackOut() {
   const target = Math.max(INITIAL_ZOOM, map.getZoom() - DESELECT_ZOOM_OUT);
   if (target < map.getZoom()) {
     map.flyTo(map.getCenter(), target, { duration: FLY_SECONDS });
+    flying = true;
   }
 }
 
@@ -528,8 +556,8 @@ function glyphSvg(tipo, color, px) {
 // Legend icons share the same glyph geometry as the map pins.
 const legUni = document.getElementById('leg-uni');
 const legInst = document.getElementById('leg-inst');
-if (legUni) legUni.innerHTML = glyphSvg('Universidade', '#3c0c0c', 18);
-if (legInst) legInst.innerHTML = glyphSvg('Instituicao', '#3c0c0c', 18);
+if (legUni) legUni.innerHTML = glyphSvg('Universidade', '#1a1a1a', 18);
+if (legInst) legInst.innerHTML = glyphSvg('Instituicao', '#1a1a1a', 18);
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
