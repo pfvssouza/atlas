@@ -148,33 +148,35 @@
     flex-direction: column;
     max-height: calc(100% - 24px);
     background: #ffffff;
-    border: 1px solid #dbdbdb;
     border-radius: 3px;
-    box-shadow: 0 2px 8px rgba(60,12,12,0.10);
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(60,12,12,0.22);
     font-family: 'Manrope', sans-serif;
     color: #1a1a1a;
     animation: art-in 260ms ease-out;
   }
   .articles.ready { display: flex; }
   .articles.expanded { width: 300px; }
-  .art-head { display: flex; align-items: center; flex: none; }
+  /* Solid GIHPP-red title bar in the same style as the state hover tag, so it
+     reads as an interactive control rather than a basemap label. */
+  .art-head { display: flex; align-items: center; flex: none; background: #961E1E; }
   .art-toggle {
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
     background: none;
     border: 0;
     margin: 0;
-    padding: 11px 14px;
+    padding: 10px 16px;
     cursor: pointer;
-    font-family: 'Manrope', sans-serif;
-    font-weight: 700;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: #961E1E;
+    font-family: 'Roboto Slab', serif;
+    font-weight: 500;
+    font-size: 13.5px;
+    letter-spacing: 0.2px;
+    color: #ffffff;
     text-align: left;
+    white-space: nowrap;
   }
   .art-chevron { width: 14px; height: 14px; flex: none; transition: transform 220ms ease-out; }
   .articles.expanded .art-chevron { transform: rotate(180deg); }
@@ -188,14 +190,13 @@
     border: 0;
     padding: 0;
     cursor: pointer;
-    color: #1a1a1a;
+    color: #ffffff;
     align-items: center;
     justify-content: center;
   }
   .articles.expanded .art-close { display: flex; }
-  .art-close:hover, .art-toggle:hover { opacity: 0.75; }
+  .art-head:hover { background: #7f1919; }
   .art-body {
-    border-top: 1px solid #ebebeb;
     overflow-y: auto;
     flex: 1 1 auto;
     min-height: 0;
@@ -399,7 +400,9 @@ const COL = {
 };
 
 // Map setup
-const INITIAL_ZOOM = 4;
+// INITIAL_ZOOM is refined once the states are drawn: the opening view is
+// fitted to Brazil itself (see fitBrazil below).
+let INITIAL_ZOOM = 4;
 const map = L.map('map', { scrollWheelZoom: true }).setView([-14.2, -51.9], INITIAL_ZOOM);
 
 // View framing. A selected state is flown into view and framed; tiny states
@@ -614,6 +617,30 @@ const statesLayer = L.geoJSON(statesGeo, {
 // Look up a state's layer by its sigla, used when a pin needs its state.
 const layerBySigla = {};
 statesLayer.eachLayer((l) => { layerBySigla[l.feature.properties.sigla] = l; });
+
+// Opening view: fit Brazil to the frame instead of a fixed whole zoom level,
+// which left the country small in a sea of ocean and other continents. This
+// needs an in-between zoom (e.g. 4.6), so snapping is relaxed just for this
+// one fit; everything after it snaps to whole levels as before.
+function fitBrazil() {
+  const narrow = window.matchMedia('(max-width: 640px)').matches;
+  // On narrow screens the legend sits low across the map, so fit above it.
+  let bottom = 16;
+  if (narrow) {
+    const legend = document.querySelector('.legend');
+    const mapRect = document.getElementById('map').getBoundingClientRect();
+    bottom = legend ? mapRect.bottom - legend.getBoundingClientRect().top + 12 : 56;
+  }
+  map.options.zoomSnap = 0;
+  map.fitBounds(statesLayer.getBounds(), {
+    paddingTopLeft: [16, 16],
+    paddingBottomRight: [16, bottom],
+    animate: false
+  });
+  map.options.zoomSnap = 1;
+  INITIAL_ZOOM = map.getZoom();
+}
+fitBrazil();
 
 // Clicking anywhere that isn't a state deselects, backs the view out a bit,
 // and returns the articles box to rest.
