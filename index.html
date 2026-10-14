@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atlas GIHPP</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Roboto+Slab:wght@500;600;700&display=swap" rel="stylesheet">
@@ -135,6 +136,149 @@
   /* Flipped orientation near the right edge: tag first, line to its right,
      and the whole label shifted left of the cursor. */
   #hover-label.flip { flex-direction: row-reverse; }
+
+  /* "Artigos Publicados" box, fixed at the top right of the map. Three levels:
+     rest (title only), list (states with an article), article (text + link). */
+  .articles {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    max-height: calc(100% - 24px);
+    background: #ffffff;
+    border: 1px solid #dbdbdb;
+    border-radius: 3px;
+    box-shadow: 0 2px 8px rgba(60,12,12,0.10);
+    font-family: 'Manrope', sans-serif;
+    color: #1a1a1a;
+    animation: art-in 260ms ease-out;
+  }
+  .articles.ready { display: flex; }
+  .articles.expanded { width: 300px; }
+  .art-head { display: flex; align-items: center; flex: none; }
+  .art-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: 0;
+    margin: 0;
+    padding: 11px 14px;
+    cursor: pointer;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #961E1E;
+    text-align: left;
+  }
+  .art-chevron { width: 14px; height: 14px; flex: none; transition: transform 220ms ease-out; }
+  .articles.expanded .art-chevron { transform: rotate(180deg); }
+  .art-close {
+    display: none;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    margin-right: 4px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: #1a1a1a;
+    align-items: center;
+    justify-content: center;
+  }
+  .articles.expanded .art-close { display: flex; }
+  .art-close:hover, .art-toggle:hover { opacity: 0.75; }
+  .art-body {
+    border-top: 1px solid #ebebeb;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .art-body.enter { animation: art-slide 240ms ease-out; }
+  .art-list { list-style: none; margin: 0; padding: 4px 0; }
+  .art-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: 0;
+    margin: 0;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #1a1a1a;
+    text-align: left;
+  }
+  .art-item:hover { color: #961E1E; }
+  .art-item svg { width: 14px; height: 14px; flex: none; }
+  .art-article { padding: 12px 16px 16px; }
+  .art-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: 0;
+    margin: 0 0 10px;
+    padding: 0;
+    cursor: pointer;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #1a1a1a;
+  }
+  .art-back:hover { color: #961E1E; }
+  .art-title {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.25;
+    color: #961E1E;
+    margin: 0 0 8px;
+  }
+  .art-text { font-size: 13px; line-height: 1.55; margin: 0; }
+  .art-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #961E1E;
+    text-decoration: underline;
+  }
+  .art-link svg { width: 12px; height: 12px; flex: none; }
+  @keyframes art-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes art-slide { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+
+  /* Narrow screens: the box becomes a bar along the bottom that expands upward.
+     The legend and map credits move up so the bar doesn't cover them. */
+  @media (max-width: 640px) {
+    .articles {
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: 62%;
+      border-radius: 6px 6px 0 0;
+      border-bottom: 0;
+    }
+    .articles.expanded { width: auto; }
+    .art-body.enter { animation: art-rise 240ms ease-out; }
+    .legend { bottom: 56px; }
+    .leaflet-bottom { bottom: 42px; }
+  }
+  @keyframes art-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
@@ -153,6 +297,18 @@
     <div class="legend-title">Tipo</div>
     <div class="legend-row"><span id="leg-uni" class="legend-pin"></span>Universidade</div>
     <div class="legend-row"><span id="leg-inst" class="legend-pin"></span>Instituição de Psicanálise</div>
+  </div>
+  <div class="articles" id="articles">
+    <div class="art-head">
+      <button class="art-toggle" type="button" aria-expanded="false">
+        <span>Artigos Publicados</span>
+        <svg class="art-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <button class="art-close" type="button" aria-label="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="art-body" hidden></div>
   </div>
 </div>
 
@@ -227,6 +383,9 @@ function pinColor(sigla, regiao) {
 // To update the map, edit the sheet - no code changes needed.
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRn7KTrmDmz2_Ddj_NmLeOMO2IDyXRVfV_naatjvgzS5t9Fk3vDjOJ0mEPynZHtWe1JCE57gqqYdYkx/pub?gid=0&single=true&output=csv';
 
+// Second tab of the same sheet, "Artigos": columns Estado | Texto | Link.
+const ARTICLES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRn7KTrmDmz2_Ddj_NmLeOMO2IDyXRVfV_naatjvgzS5t9Fk3vDjOJ0mEPynZHtWe1JCE57gqqYdYkx/pub?gid=867424401&single=true&output=csv';
+
 // Exact column headers expected in the sheet
 const COL = {
   nome: 'Nome da Instituição',
@@ -253,13 +412,39 @@ const DESELECT_ZOOM_OUT = 2; // zoom levels to back out when deselecting
 
 // The legend sits over the bottom-left of the map, so the left padding grows
 // by its width: the state is framed in the clear area to its right.
+// The articles box takes the right side when open (or the bottom on narrow
+// screens), so the framing keeps clear of it too.
 function framePadding() {
   const legend = document.querySelector('.legend');
+  // Narrow screens: the legend and the articles bar both sit along the bottom,
+  // so frame the state in the clear area above whichever reaches higher.
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    const mapRect = document.getElementById('map').getBoundingClientRect();
+    let top = mapRect.bottom;
+    if (legend) top = Math.min(top, legend.getBoundingClientRect().top);
+    const art = document.getElementById('articles');
+    if (art && art.classList.contains('ready')) top = Math.min(top, art.getBoundingClientRect().top);
+    return {
+      paddingTopLeft: [FRAME_MARGIN / 2, FRAME_MARGIN],
+      paddingBottomRight: [FRAME_MARGIN / 2, mapRect.bottom - top + FRAME_MARGIN / 2]
+    };
+  }
   const left = (legend ? legend.offsetWidth : 0) + FRAME_MARGIN * 1.5;
+  const box = articleBoxClearance();
   return {
     paddingTopLeft: [left, FRAME_MARGIN],
-    paddingBottomRight: [FRAME_MARGIN, FRAME_MARGIN]
+    paddingBottomRight: [FRAME_MARGIN + box.right, FRAME_MARGIN + box.bottom]
   };
+}
+
+// How much of the right edge / bottom edge the articles box currently covers.
+function articleBoxClearance() {
+  const el = document.getElementById('articles');
+  if (!el || !el.classList.contains('ready')) return { right: 0, bottom: 0 };
+  const narrow = window.matchMedia('(max-width: 640px)').matches;
+  if (narrow) return { right: 0, bottom: el.offsetHeight };
+  if (!el.classList.contains('expanded')) return { right: 0, bottom: 0 };
+  return { right: el.offsetWidth + 12, bottom: 0 };
 }
 
 // The zoom level at which a state would be framed, respecting the cap.
@@ -418,6 +603,9 @@ const statesLayer = L.geoJSON(statesGeo, {
     layer.on('mouseout', hideHover);
     layer.on('click', (e) => {
       L.DomEvent.stopPropagation(e); // don't let the map-background handler fire
+      // Update the articles box first, so the framing below already knows
+      // whether the box is open and keeps the state clear of it.
+      articlesOnStateClick(feature.properties.sigla);
       selectState(layer);
     });
   }
@@ -427,8 +615,12 @@ const statesLayer = L.geoJSON(statesGeo, {
 const layerBySigla = {};
 statesLayer.eachLayer((l) => { layerBySigla[l.feature.properties.sigla] = l; });
 
-// Clicking anywhere that isn't a state deselects and backs the view out a bit.
-map.on('click', deselectAndBackOut);
+// Clicking anywhere that isn't a state deselects, backs the view out a bit,
+// and returns the articles box to rest.
+map.on('click', () => {
+  setArticleLevel('rest');
+  deselectAndBackOut();
+});
 
 // Determine which state a coordinate falls inside (ray-casting), so pin colour
 // follows its region/state automatically - no state column needed in the sheet.
@@ -634,19 +826,156 @@ function addInstitution(rec) {
   // is zoomed out further than the pin's state would be framed, fly to that
   // state, select it, and open the popup only once the flight has landed.
   // Otherwise just open the popup as usual.
+  // Pins never change the articles box; their popups are only nudged clear of it.
+  const openPopupClearOfBox = () => {
+    const box = articleBoxClearance();
+    const popup = marker.getPopup();
+    popup.options.autoPanPaddingTopLeft = L.point(20, 20);
+    popup.options.autoPanPaddingBottomRight = L.point(20 + box.right, 20 + box.bottom);
+    marker.openPopup();
+  };
   marker.off('click');
   marker.on('click', (e) => {
     L.DomEvent.stopPropagation(e);
     const layer = st ? layerBySigla[st.sigla] : null;
     if (layer && map.getZoom() < frameZoomFor(layer)) {
       map.closePopup();
-      map.once('moveend', () => marker.openPopup());
+      map.once('moveend', openPopupClearOfBox);
       selectState(layer);
     } else {
-      marker.openPopup();
+      openPopupClearOfBox();
     }
   });
 }
+
+// Articles box ("Artigos Publicados")
+// Levels: 'rest' (title only), 'list' (states with an article), 'article'.
+const artEl = document.getElementById('articles');
+const artToggle = artEl.querySelector('.art-toggle');
+const artClose = artEl.querySelector('.art-close');
+const artBody = artEl.querySelector('.art-body');
+const ARTICLES = {};        // sigla -> { texto, link }
+let artLevel = 'rest';
+let artSigla = null;
+
+const ICON_ARROW_RIGHT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+const ICON_ARROW_LEFT = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>';
+const ICON_EXTERNAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+
+// Match state names ignoring accents, capitals and extra spaces.
+function normName(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+const SIGLA_BY_NAME = {};
+const NAME_BY_SIGLA = {};
+statesGeo.features.forEach((f) => {
+  SIGLA_BY_NAME[normName(f.properties.nome)] = f.properties.sigla;
+  NAME_BY_SIGLA[f.properties.sigla] = f.properties.nome;
+});
+
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+
+function renderArticleBody() {
+  if (artLevel === 'list') {
+    const siglas = Object.keys(ARTICLES)
+      .sort((a, b) => NAME_BY_SIGLA[a].localeCompare(NAME_BY_SIGLA[b], 'pt-BR'));
+    return '<ul class="art-list">' + siglas.map(sg =>
+      `<li><button class="art-item" type="button" data-sigla="${sg}">`
+      + `<span>${escapeHtml(NAME_BY_SIGLA[sg])}</span>${ICON_ARROW_RIGHT}</button></li>`
+    ).join('') + '</ul>';
+  }
+  const a = ARTICLES[artSigla];
+  let html = '<div class="art-article">'
+    + `<button class="art-back" type="button">${ICON_ARROW_LEFT}Artigos</button>`
+    + `<h2 class="art-title">${escapeHtml(NAME_BY_SIGLA[artSigla])}</h2>`
+    + `<p class="art-text">${escapeHtml(a.texto).replace(/\n/g, '<br>')}</p>`;
+  if (a.link) {
+    html += `<a class="art-link" href="${escapeAttr(a.link)}" target="_blank" rel="noopener">`
+      + `Link para o artigo${ICON_EXTERNAL}</a>`;
+  }
+  return html + '</div>';
+}
+
+function setArticleLevel(level, sigla) {
+  if (level === 'article' && !ARTICLES[sigla]) level = 'rest';
+  const changed = level !== artLevel || (level === 'article' && sigla !== artSigla);
+  artLevel = level;
+  artSigla = level === 'article' ? sigla : null;
+  const open = level !== 'rest';
+  artEl.classList.toggle('expanded', open);
+  artToggle.setAttribute('aria-expanded', String(open));
+  if (!open) {
+    artBody.hidden = true;
+    artBody.innerHTML = '';
+    return;
+  }
+  artBody.hidden = false;
+  artBody.innerHTML = renderArticleBody();
+  artBody.scrollTop = 0;
+  if (changed) {
+    artBody.classList.remove('enter');
+    void artBody.offsetWidth;     // restart the entrance animation
+    artBody.classList.add('enter');
+  }
+}
+
+// Clicking a state on the map: open its article if it has one, otherwise
+// return the box to rest.
+function articlesOnStateClick(sigla) {
+  if (ARTICLES[sigla]) setArticleLevel('article', sigla);
+  else setArticleLevel('rest');
+}
+
+// The title toggles between rest and the list; from an article it collapses.
+artToggle.addEventListener('click', () => {
+  setArticleLevel(artLevel === 'rest' ? 'list' : 'rest');
+});
+artClose.addEventListener('click', () => setArticleLevel('rest'));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && artLevel !== 'rest') setArticleLevel('rest');
+});
+
+artBody.addEventListener('click', (e) => {
+  const item = e.target.closest('.art-item');
+  if (item) {
+    // Same as clicking the state on the map: open the article, then fly there.
+    const sg = item.getAttribute('data-sigla');
+    setArticleLevel('article', sg);
+    if (layerBySigla[sg]) selectState(layerBySigla[sg]);
+    return;
+  }
+  if (e.target.closest('.art-back')) setArticleLevel('list');
+});
+
+// Keep wheel and drag gestures inside the box from moving the map.
+L.DomEvent.disableClickPropagation(artEl);
+L.DomEvent.disableScrollPropagation(artEl);
+
+fetch(ARTICLES_CSV_URL)
+  .then(r => r.text())
+  .then(text => {
+    const rows = parseCSV(text);
+    if (rows.length < 2) return;
+    const headers = rows[0].map(normName);
+    const iEstado = headers.indexOf('estado');
+    const iTexto = headers.indexOf('texto');
+    const iLink = headers.indexOf('link');
+    if (iEstado < 0 || iTexto < 0) return;
+    for (let i = 1; i < rows.length; i++) {
+      const sigla = SIGLA_BY_NAME[normName(rows[i][iEstado])];
+      const texto = (rows[i][iTexto] || '').trim();
+      if (!sigla || !texto) continue;
+      let link = iLink >= 0 ? (rows[i][iLink] || '').trim() : '';
+      if (!/^https?:\/\//i.test(link)) link = '';
+      ARTICLES[sigla] = { texto, link };
+    }
+    // The box only appears when at least one article exists.
+    if (Object.keys(ARTICLES).length) artEl.classList.add('ready');
+  })
+  .catch(() => {
+    console.warn('Não foi possível carregar os artigos.');
+  });
 
 // Load the sheet
 fetch(SHEET_CSV_URL)
